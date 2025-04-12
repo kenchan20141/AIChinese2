@@ -1,1 +1,134 @@
-11
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR 工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #result {
+            margin-top: 20px;
+            white-space: pre-wrap; /* 保留換行和空格 */
+            border: 1px solid #ccc;
+            padding: 10px;
+            min-height: 100px;
+        }
+        button {
+            padding: 5px 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>OCR 工具</h1>
+    <form id="uploadForm">
+        <input type="file" id="imageInput" accept="image/*" required>
+        <button type="submit">提交</button>
+    </form>
+    <div id="result"></div>
+
+    <script>
+        // API 配置
+        const API_KEYS = ["sk-MoqwsgO8P9MEoCrftvdSYA"];
+        let currentApiKeyIndex = 0;
+        const API_URL = "https://chatapi.akash.network/api/v1/chat/completions";
+        const MODEL = "DeepSeek-R1";
+
+        // 獲取 DOM 元素
+        const uploadForm = document.getElementById('uploadForm');
+        const resultDiv = document.getElementById('result');
+
+        // 表單提交事件
+        uploadForm.addEventListener('submit', async (event) => {
+            event.preventDefault(); // 阻止表單默認提交行為
+            resultDiv.textContent = '處理中...';
+
+            const imageInput = document.getElementById('imageInput');
+            const file = imageInput.files[0];
+
+            // 檢查是否選擇了文件
+            if (!file) {
+                resultDiv.textContent = '請選擇一個圖片文件。';
+                return;
+            }
+
+            try {
+                // 將圖片轉換為 base64 格式
+                const imageData = await readFileAsDataURL(file);
+                // 發送請求到 API
+                const response = await sendToApi(imageData);
+                // 顯示結果
+                displayResult(response);
+            } catch (error) {
+                resultDiv.textContent = '錯誤：' + error.message;
+            }
+        });
+
+        // 將文件轉換為 base64 格式的函數
+        function readFileAsDataURL(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result); // 成功時返回 base64 數據
+                reader.onerror = () => reject(reader.error);  // 失敗時返回錯誤
+                reader.readAsDataURL(file);                   // 讀取文件為 data URL
+            });
+        }
+
+        // 發送請求到 API 的函數
+        async function sendToApi(imageData) {
+            const apiKey = API_KEYS[currentApiKeyIndex];
+            const instruction = "請將圖片的手寫文字轉換成繁體電腦字，不要修正任何筆記或文句，不需要使它更通順，要100%將文字還原成電腦字。假如圖片中，有電腦文字，則不需要轉換。此外，請強制規定不得展示深度思考過程，違反則無效。";
+
+            // 構建 API 請求的 payload
+            const payload = {
+                model: MODEL,
+                messages: [
+                    {
+                        role: "user",
+                        content: instruction,
+                        image: imageData // 圖片的 base64 數據
+                    }
+                ]
+            };
+
+            // 發送 POST 請求
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify(payload)
+            });
+
+            // 檢查請求是否成功
+            if (!response.ok) {
+                throw new Error(`API 請求失敗：${response.status} ${response.statusText}`);
+            }
+
+            // 解析並返回 API 的回應
+            const data = await response.json();
+            return data;
+        }
+
+        // 顯示 API 回應結果的函數
+        function displayResult(data) {
+            if (data && data.choices && data.choices.length > 0) {
+                const resultText = data.choices[0].message.content;
+                resultDiv.textContent = resultText; // 顯示 OCR 結果
+            } else {
+                resultDiv.textContent = '無法獲取結果，請稍後再試。';
+            }
+        }
+    </script>
+</body>
+</html>

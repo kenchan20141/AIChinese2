@@ -2,132 +2,192 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>繁體中文OCR工具</title>
-    <!-- 引入Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- 引入Google Fonts Noto Sans TC 以支持繁體中文 -->
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+    <title>免費手寫繁體中文OCR工具</title>
     <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --background: #f8f9fa;
+        }
+
         body {
-            font-family: 'Noto Sans TC', sans-serif;
-            background-color: #f0f2f5;
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: var(--background);
         }
-        .card {
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .upload-section {
+            border: 2px dashed var(--primary-color);
             border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
         }
-        #result pre {
-            background-color: #f8f9fa;
-            padding: 15px;
-            border-radius: 5px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
+
+        .upload-section:hover {
+            border-color: var(--secondary-color);
+            background-color: rgba(52, 152, 219, 0.05);
         }
-        #imagePreview img {
+
+        #imagePreview {
             max-width: 100%;
-            height: auto;
-            border-radius: 5px;
+            max-height: 300px;
+            margin: 20px 0;
+            border-radius: 8px;
+            display: none;
         }
-        #loading {
-            color: #007bff;
-            font-weight: bold;
+
+        #fileInput {
+            display: none;
+        }
+
+        .custom-upload-btn {
+            background-color: var(--secondary-color);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .custom-upload-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        #result {
+            min-height: 150px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+
+        .loading {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .loading::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
+            animation: loading 1.5s infinite;
+        }
+
+        @keyframes loading {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .error {
+            color: #e74c3c;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: #f8d7da;
+            margin-top: 20px;
         }
     </style>
 </head>
 <body>
-    <div class="container mt-5">
-        <h1 class="text-center mb-4">繁體中文OCR工具</h1>
-        <div class="row justify-content-center">
-            <div class="col-md-8">
-                <div class="card">
-                    <div class="card-body">
-                        <!-- 文件上傳輸入框 -->
-                        <input type="file" id="imageUpload" accept="image/*" class="form-control mb-3">
-                        <!-- 圖片預覽區域 -->
-                        <div id="imagePreview" class="mb-3"></div>
-                        <!-- 識別按鈕 -->
-                        <button id="recognizeBtn" class="btn btn-primary">開始識別</button>
-                        <!-- 處理中提示 -->
-                        <div id="loading" class="mt-3" style="display: none;">正在處理中...</div>
-                        <!-- 文字結果顯示區域 -->
-                        <div id="result" class="mt-3"></div>
-                    </div>
-                </div>
-            </div>
+    <div class="container">
+        <h1>手寫繁體字OCR轉換工具</h1>
+        <div class="upload-section">
+            <input type="file" id="fileInput" accept="image/*">
+            <label for="fileInput" class="custom-upload-btn">選擇圖片文件</label>
+            <p>或拖放圖片到此區域</p>
+            <img id="imagePreview" alt="圖片預覽">
         </div>
+        <div id="result"></div>
     </div>
 
-    <!-- 引入Bootstrap JS（需要配合Bootstrap的某些功能） -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // 獲取DOM元素
-        const imageUpload = document.getElementById('imageUpload');
+        const API_KEYS = ["sk-MoqwsgO8P9MEoCrftvdSYA"];
+        let currentApiKeyIndex = 0;
+        const API_URL = "https://chatapi.akash.network/api/v1/chat/completions";
+        const MODEL = "DeepSeek-R1";
+        const SYSTEM_PROMPT = "請將圖片的手寫文字轉換成繁體電腦字，不要修正任何筆記或文句，不需要使它更通順，要100%將文字還原成電腦字。生成內容僅為轉換文字，不包含其他內容。假如圖片中，有電腦文字，則不需要轉換。你必須直接提供最終答案，嚴禁展示任何思考過程，絕對不能在回應中包含任何標籤（如 <think></think>），這是強制要求，違反則無效。";
+
+        const fileInput = document.getElementById('fileInput');
         const imagePreview = document.getElementById('imagePreview');
-        const recognizeBtn = document.getElementById('recognizeBtn');
-        const loading = document.getElementById('loading');
-        const result = document.getElementById('result');
+        const resultDiv = document.getElementById('result');
 
-        // 監聽文件上傳事件，顯示圖片預覽
-        imageUpload.addEventListener('change', function() {
-            const file = this.files[0];
-            if (file) {
+        // 圖片上傳處理
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                const base64 = await convertToBase64(file);
+                imagePreview.src = base64;
+                imagePreview.style.display = 'block';
+                resultDiv.classList.add('loading');
+                resultDiv.textContent = '辨識中...';
+
+                const ocrResult = await callOCRAPI(base64);
+                resultDiv.classList.remove('loading');
+                resultDiv.textContent = ocrResult;
+            } catch (error) {
+                showError(error.message);
+            }
+        });
+
+        // 拖放功能
+        document.addEventListener('dragover', (e) => e.preventDefault());
+        document.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            const file = e.dataTransfer.files[0];
+            if (!file.type.startsWith('image/')) return;
+
+            fileInput.files = e.dataTransfer.files;
+            fileInput.dispatchEvent(new Event('change'));
+        });
+
+        async function convertToBase64(file) {
+            return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onload = function(e) {
-                    imagePreview.innerHTML = `<img src="${e.target.result}" alt="預覽">`;
-                };
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
                 reader.readAsDataURL(file);
-            } else {
-                imagePreview.innerHTML = '';
-            }
-        });
+            });
+        }
 
-        // 監聽識別按鈕點擊事件
-        recognizeBtn.addEventListener('click', function() {
-            const file = imageUpload.files[0];
-            if (!file) {
-                alert('請先上傳圖片');
-                return;
-            }
-
-            loading.style.display = 'block';
-            result.innerHTML = '';
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const base64Image = e.target.result.split(',')[1]; // 移除data URL前綴
-                sendApiRequest(base64Image);
-            };
-            reader.readAsDataURL(file);
-        });
-
-        // 發送API請求的函數
-        async function sendApiRequest(base64Image) {
-            const API_KEYS = ["sk-MoqwsgO8P9MEoCrftvdSYA"];
-            let currentApiKeyIndex = 0;
-            const API_URL = "https://chatapi.akash.network/api/v1/chat/completions";
-            const MODEL = "DeepSeek-R1";
-            const instruction = "請將圖片的手寫文字轉換成繁體電腦字，不要修正任何筆記或文句，不需要使它更通順，要100%將文字還原成電腦字。生成內容僅為轉換文字，不包含其他內容。假如圖片中，有電腦文字，則不需要轉換。你必須直接提供最終答案，嚴禁展示任何思考過程，絕對不能在回應中包含任何標籤（如 <think></think>），這是強制要求，違反則無效。";
-
+        async function callOCRAPI(base64Data) {
             const payload = {
                 model: MODEL,
                 messages: [
                     {
+                        role: "system",
+                        content: SYSTEM_PROMPT
+                    },
+                    {
                         role: "user",
                         content: [
                             {
-                                type: "text",
-                                text: instruction
-                            },
-                            {
                                 type: "image_url",
-                                image_url: {
-                                    url: `data:image/jpeg;base64,${base64Image}`
-                                }
+                                image_url: { url: base64Data }
                             }
                         ]
                     }
-                ]
+                ],
+                temperature: 0,
+                max_tokens: 2000
             };
 
             try {
@@ -140,19 +200,19 @@
                     body: JSON.stringify(payload)
                 });
 
-                if (!response.ok) {
-                    throw new Error('API請求失敗');
-                }
-
+                if (!response.ok) throw new Error(`API錯誤: ${response.status}`);
+                
                 const data = await response.json();
-                const text = data.choices[0].message.content;
-                result.innerHTML = `<pre>${text}</pre>`;
+                return data.choices[0].message.content;
             } catch (error) {
-                console.error(error);
-                result.innerHTML = '識別失敗，請稍後再試';
-            } finally {
-                loading.style.display = 'none';
+                currentApiKeyIndex = (currentApiKeyIndex + 1) % API_KEYS.length;
+                throw new Error(`識別失敗，請稍後再試 (${error.message})`);
             }
+        }
+
+        function showError(message) {
+            resultDiv.classList.remove('loading');
+            resultDiv.innerHTML = `<div class="error">${message}</div>`;
         }
     </script>
 </body>

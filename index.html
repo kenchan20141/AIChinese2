@@ -1,133 +1,197 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OCR 工具</title>
+    <title>OCR工具</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
+            font-family: 'Noto Sans TC', Arial, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
         }
-        #result {
-            margin-top: 20px;
-            white-space: pre-wrap; /* 保留換行和空格 */
-            border: 1px solid #ccc;
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            width: 450px;
+            text-align: center;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+        input[type="file"] {
+            display: block;
+            margin: 20px auto;
             padding: 10px;
-            min-height: 100px;
-        }
-        button {
-            padding: 5px 10px;
-            background-color: #007bff;
-            color: white;
-            border: none;
+            border: 2px dashed #3498db;
+            border-radius: 5px;
+            width: 80%;
             cursor: pointer;
         }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
         button:hover {
-            background-color: #0056b3;
+            background-color: #2980b9;
+        }
+        .loading {
+            display: none;
+            margin-top: 15px;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        #response {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #ecf0f1;
+            border: 1px solid #dcdcdc;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            text-align: left;
+            min-height: 100px;
+            font-size: 14px;
+        }
+        #copyBtn {
+            margin-top: 10px;
+            padding: 8px 15px;
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            display: none;
+        }
+        #copyBtn:hover {
+            background-color: #27ae60;
         }
     </style>
 </head>
 <body>
-    <h1>OCR 工具</h1>
-    <form id="uploadForm">
-        <input type="file" id="imageInput" accept="image/*" required>
-        <button type="submit">提交</button>
-    </form>
-    <div id="result"></div>
+    <div class="container">
+        <h1>OCR工具</h1>
+        <input type="file" id="imageInput" accept="image/*">
+        <button id="submitBtn">提交</button>
+        <div class="loading" id="loading">正在處理中...</div>
+        <div id="response"></div>
+        <button id="copyBtn">複製結果</button>
+    </div>
 
     <script>
-        // API 配置
+        // API相關常數
         const API_KEYS = ["sk-MoqwsgO8P9MEoCrftvdSYA"];
         let currentApiKeyIndex = 0;
         const API_URL = "https://chatapi.akash.network/api/v1/chat/completions";
         const MODEL = "DeepSeek-R1";
+        const INSTRUCTION = "請將圖片的手寫文字轉換成繁體電腦字，不要修正任何筆記或文句，不需要使它更通順，要100%將文字還原成電腦字。生成內容僅為轉換文字，不包含其他內容。假如圖片中，有電腦文字，則不需要轉換。此外，請強制規定不得展示深度思考過程，違反則無效。";
 
-        // 獲取 DOM 元素
-        const uploadForm = document.getElementById('uploadForm');
-        const resultDiv = document.getElementById('result');
+        // 獲取HTML元素
+        const imageInput = document.getElementById('imageInput');
+        const submitBtn = document.getElementById('submitBtn');
+        const loading = document.getElementById('loading');
+        const responseDiv = document.getElementById('response');
+        const copyBtn = document.getElementById('copyBtn');
 
-        // 表單提交事件
-        uploadForm.addEventListener('submit', async (event) => {
-            event.preventDefault(); // 阻止表單默認提交行為
-            resultDiv.textContent = '處理中...';
-
-            const imageInput = document.getElementById('imageInput');
+        // 提交按鈕點擊事件
+        submitBtn.addEventListener('click', async () => {
             const file = imageInput.files[0];
-
-            // 檢查是否選擇了文件
             if (!file) {
-                resultDiv.textContent = '請選擇一個圖片文件。';
+                alert('請先選擇一個圖片文件！');
                 return;
             }
 
+            // 顯示載入指示器並清空回應
+            loading.style.display = 'block';
+            responseDiv.textContent = '';
+            copyBtn.style.display = 'none';
+
             try {
-                // 將圖片轉換為 base64 格式
-                const imageData = await readFileAsDataURL(file);
-                // 發送請求到 API
-                const response = await sendToApi(imageData);
-                // 顯示結果
-                displayResult(response);
+                // 將圖片轉換為base64
+                const base64Image = await readFileAsBase64(file);
+
+                // 構造API請求的payload
+                const payload = {
+                    model: MODEL,
+                    messages: [
+                        {
+                            role: "user",
+                            content: INSTRUCTION
+                        },
+                        {
+                            role: "user",
+                            content: base64Image
+                        }
+                    ]
+                };
+
+                // 使用當前的API Key發送請求
+                const apiKey = API_KEYS[currentApiKeyIndex];
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API請求失敗: ${response.statusText}`);
+                }
+
+                // 解析API回應並顯示結果
+                const data = await response.json();
+                const result = data.choices[0].message.content;
+                responseDiv.textContent = result;
+
+                // 顯示複製按鈕
+                copyBtn.style.display = 'block';
             } catch (error) {
-                resultDiv.textContent = '錯誤：' + error.message;
+                console.error('錯誤:', error);
+                responseDiv.textContent = '發生錯誤: ' + error.message;
+                if (error.message.includes('API')) {
+                    currentApiKeyIndex = (currentApiKeyIndex + 1) % API_KEYS.length;
+                    alert('API Key可能無效，將嘗試下一個Key。');
+                }
+            } finally {
+                loading.style.display = 'none';
             }
         });
 
-        // 將文件轉換為 base64 格式的函數
-        function readFileAsDataURL(file) {
+        // 複製按鈕點擊事件
+        copyBtn.addEventListener('click', () => {
+            const text = responseDiv.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('已複製到剪貼簿！');
+            }).catch(err => {
+                alert('複製失敗: ' + err);
+            });
+        });
+
+        // 將文件轉換為base64的函數
+        function readFileAsBase64(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onload = () => resolve(reader.result); // 成功時返回 base64 數據
-                reader.onerror = () => reject(reader.error);  // 失敗時返回錯誤
-                reader.readAsDataURL(file);                   // 讀取文件為 data URL
+                reader.onload = () => resolve(reader.result.split(',')[1]); // 去掉data:image前綴
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
             });
-        }
-
-        // 發送請求到 API 的函數
-        async function sendToApi(imageData) {
-            const apiKey = API_KEYS[currentApiKeyIndex];
-            const instruction = "請將圖片的手寫文字轉換成繁體電腦字，不要修正任何筆記或文句，不需要使它更通順，要100%將文字還原成電腦字。假如圖片中，有電腦文字，則不需要轉換。此外，請強制規定不得展示深度思考過程，違反則無效。";
-
-            // 構建 API 請求的 payload
-            const payload = {
-                model: MODEL,
-                messages: [
-                    {
-                        role: "user",
-                        content: instruction,
-                        image: imageData // 圖片的 base64 數據
-                    }
-                ]
-            };
-
-            // 發送 POST 請求
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
-                body: JSON.stringify(payload)
-            });
-
-            // 檢查請求是否成功
-            if (!response.ok) {
-                throw new Error(`API 請求失敗：${response.status} ${response.statusText}`);
-            }
-
-            // 解析並返回 API 的回應
-            const data = await response.json();
-            return data;
-        }
-
-        // 顯示 API 回應結果的函數
-        function displayResult(data) {
-            if (data && data.choices && data.choices.length > 0) {
-                const resultText = data.choices[0].message.content;
-                resultDiv.textContent = resultText; // 顯示 OCR 結果
-            } else {
-                resultDiv.textContent = '無法獲取結果，請稍後再試。';
-            }
         }
     </script>
 </body>

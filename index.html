@@ -1,80 +1,158 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-Hant">
 <head>
-    <title>圖片轉文字 - DeepSeek</title>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.4/dist/tesseract.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>繁體中文OCR工具</title>
+    <!-- 引入Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- 引入Google Fonts Noto Sans TC 以支持繁體中文 -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f0f2f5;
+        }
+        .card {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border-radius: 10px;
+        }
+        #result pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        #imagePreview img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 5px;
+        }
+        #loading {
+            color: #007bff;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
-    <h1>上傳圖片並轉換手寫文字</h1>
-    <input type="file" id="imageInput" accept="image/*">
-    <button onclick="processImage()">處理圖片</button>
-    <div id="output">結果將顯示在這裡</div>
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">繁體中文OCR工具</h1>
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body">
+                        <!-- 文件上傳輸入框 -->
+                        <input type="file" id="imageUpload" accept="image/*" class="form-control mb-3">
+                        <!-- 圖片預覽區域 -->
+                        <div id="imagePreview" class="mb-3"></div>
+                        <!-- 識別按鈕 -->
+                        <button id="recognizeBtn" class="btn btn-primary">開始識別</button>
+                        <!-- 處理中提示 -->
+                        <div id="loading" class="mt-3" style="display: none;">正在處理中...</div>
+                        <!-- 文字結果顯示區域 -->
+                        <div id="result" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
+    <!-- 引入Bootstrap JS（需要配合Bootstrap的某些功能） -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // API 相關設定
-        const API_KEYS = ["sk-MoqwsgO8P9MEoCrftvdSYA"];
-        let currentApiKeyIndex = 0;
-        const API_URL = "https://chatapi.akash.network/api/v1/chat/completions";
-        const MODEL = "DeepSeek-R1";
+        // 獲取DOM元素
+        const imageUpload = document.getElementById('imageUpload');
+        const imagePreview = document.getElementById('imagePreview');
+        const recognizeBtn = document.getElementById('recognizeBtn');
+        const loading = document.getElementById('loading');
+        const result = document.getElementById('result');
 
-        async function processImage() {
-            const input = document.getElementById('imageInput');
-            if (input.files.length === 0) {
-                alert('請選擇一張圖片');
+        // 監聽文件上傳事件，顯示圖片預覽
+        imageUpload.addEventListener('change', function() {
+            const file = this.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    imagePreview.innerHTML = `<img src="${e.target.result}" alt="預覽">`;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                imagePreview.innerHTML = '';
+            }
+        });
+
+        // 監聽識別按鈕點擊事件
+        recognizeBtn.addEventListener('click', function() {
+            const file = imageUpload.files[0];
+            if (!file) {
+                alert('請先上傳圖片');
                 return;
             }
 
-            const file = input.files[0];
+            loading.style.display = 'block';
+            result.innerHTML = '';
+
             const reader = new FileReader();
+            reader.onload = function(e) {
+                const base64Image = e.target.result.split(',')[1]; // 移除data URL前綴
+                sendApiRequest(base64Image);
+            };
+            reader.readAsDataURL(file);
+        });
 
-            reader.onload = async function(e) {
-                const imageData = e.target.result;
+        // 發送API請求的函數
+        async function sendApiRequest(base64Image) {
+            const API_KEYS = ["sk-MoqwsgO8P9MEoCrftvdSYA"];
+            let currentApiKeyIndex = 0;
+            const API_URL = "https://chatapi.akash.network/api/v1/chat/completions";
+            const MODEL = "DeepSeek-R1";
+            const instruction = "請將圖片的手寫文字轉換成繁體電腦字，不要修正任何筆記或文句，不需要使它更通順，要100%將文字還原成電腦字。生成內容僅為轉換文字，不包含其他內容。假如圖片中，有電腦文字，則不需要轉換。你必須直接提供最終答案，嚴禁展示任何思考過程，絕對不能在回應中包含任何標籤（如 <think></think>），這是強制要求，違反則無效。";
 
-                // 使用 Tesseract.js 進行 OCR，指定繁體中文
-                Tesseract.recognize(
-                    imageData,
-                    'chi_tra', // 繁體中文
-                    { logger: m => console.log(m) }
-                ).then(async ({ data: { text } }) => {
-                    console.log('OCR 提取的文字:', text);
-
-                    // 準備發送到 DeepSeek API 的訊息
-                    const messages = [
-                        {
-                            "role": "system",
-                            "content": "請將以下OCR提取的文字轉換成繁體電腦字，不要修正任何筆記或文句，不需要使它更通順，要100%將文字還原成電腦字。生成內容僅為轉換文字，不包含其他內容。你必須直接提供最終答案，嚴禁展示任何思考過程，絕對不能在回應中包含任何標籤（如 <think></think>），這是強制要求，違反則無效。"
-                        },
-                        {
-                            "role": "user",
-                            "content": text
-                        }
-                    ];
-
-                    // 發送請求到 DeepSeek API
-                    const response = await fetch(API_URL, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${API_KEYS[currentApiKeyIndex]}`
-                        },
-                        body: JSON.stringify({
-                            model: MODEL,
-                            messages: messages,
-                            stream: false
-                        })
-                    });
-
-                    const data = await response.json();
-                    if (data.choices && data.choices.length > 0) {
-                        const outputText = data.choices[0].message.content;
-                        document.getElementById('output').innerText = outputText;
-                    } else {
-                        document.getElementById('output').innerText = '錯誤：無法從API獲取回應';
+            const payload = {
+                model: MODEL,
+                messages: [
+                    {
+                        role: "user",
+                        content: [
+                            {
+                                type: "text",
+                                text: instruction
+                            },
+                            {
+                                type: "image_url",
+                                image_url: {
+                                    url: `data:image/jpeg;base64,${base64Image}`
+                                }
+                            }
+                        ]
                     }
-                });
+                ]
             };
 
-            reader.readAsDataURL(file);
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${API_KEYS[currentApiKeyIndex]}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error('API請求失敗');
+                }
+
+                const data = await response.json();
+                const text = data.choices[0].message.content;
+                result.innerHTML = `<pre>${text}</pre>`;
+            } catch (error) {
+                console.error(error);
+                result.innerHTML = '識別失敗，請稍後再試';
+            } finally {
+                loading.style.display = 'none';
+            }
         }
     </script>
 </body>

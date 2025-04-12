@@ -1,172 +1,80 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OCR 工具 - 手寫文字轉繁體電腦字</title>
-    <style>
-        * {
-            box-sizing: border-box;
-            font-family: Arial, sans-serif;
-        }
-        .container {
-            max-width: 700px;
-            margin: 40px auto;
-            padding: 30px;
-            background-color: #f9f9f9;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        }
-        h1 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 20px;
-        }
-        p.instructions {
-            text-align: center;
-            color: #666;
-            margin-bottom: 30px;
-        }
-        form {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-        input[type="file"] {
-            padding: 10px;
-            border: 2px dashed #ccc;
-            border-radius: 5px;
-            background-color: #fff;
-        }
-        button {
-            padding: 12px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        .response {
-            margin-top: 30px;
-            padding: 20px;
-            background-color: #fff;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            white-space: pre-wrap;
-            min-height: 100px;
-            color: #333;
-        }
-        .loading {
-            display: none;
-            text-align: center;
-            margin-top: 20px;
-            color: #007bff;
-            font-size: 16px;
-        }
-    </style>
+    <title>圖片轉文字 - DeepSeek</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.4/dist/tesseract.min.js"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>OCR 工具</h1>
-        <p class="instructions">上傳包含手寫文字的圖片，將其轉換為繁體電腦字。</p>
-        <form id="ocr-form">
-            <input type="file" id="image-input" accept="image/*" required>
-            <button type="submit">提交</button>
-        </form>
-        <div id="response" class="response"></div>
-        <div id="loading" class="loading">處理中，請稍候...</div>
-    </div>
+    <h1>上傳圖片並轉換手寫文字</h1>
+    <input type="file" id="imageInput" accept="image/*">
+    <button onclick="processImage()">處理圖片</button>
+    <div id="output">結果將顯示在這裡</div>
 
     <script>
-        const form = document.getElementById('ocr-form');
-        const responseDiv = document.getElementById('response');
-        const loadingDiv = document.getElementById('loading');
-
-        // API 配置
+        // API 相關設定
         const API_KEYS = ["sk-MoqwsgO8P9MEoCrftvdSYA"];
         let currentApiKeyIndex = 0;
         const API_URL = "https://chatapi.akash.network/api/v1/chat/completions";
         const MODEL = "DeepSeek-R1";
-        const PROMPT = "請將圖片的手寫文字轉換成繁體電腦字，不要修正任何筆記或文句，不需要使它更通順，要100%將文字還原成電腦字。生成內容僅為轉換文字，不包含其他內容。假如圖片中，有電腦文字，則不需要轉換。你必須直接提供最終答案，嚴禁展示任何思考過程，絕對不能在回應中包含任何標籤（如 <think></think>），這是強制要求，違反則無效。";
 
-        // 表單提交事件處理
-        form.addEventListener('submit', async (event) => {
-            event.preventDefault();
-
-            const fileInput = document.getElementById('image-input');
-            const file = fileInput.files[0];
-
-            if (!file) {
-                alert('請選擇一個圖片文件！');
+        async function processImage() {
+            const input = document.getElementById('imageInput');
+            if (input.files.length === 0) {
+                alert('請選擇一張圖片');
                 return;
             }
 
-            // 顯示加載指示器，清空響應區域
-            loadingDiv.style.display = 'block';
-            responseDiv.textContent = '';
+            const file = input.files[0];
+            const reader = new FileReader();
 
-            try {
-                // 將圖片轉換為 base64
-                const base64Image = await readFileAsBase64(file);
+            reader.onload = async function(e) {
+                const imageData = e.target.result;
 
-                // 構造 API 請求消息
-                const message = {
-                    role: "user",
-                    content: [
-                        { type: "text", text: PROMPT },
-                        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } }
-                    ]
-                };
+                // 使用 Tesseract.js 進行 OCR，指定繁體中文
+                Tesseract.recognize(
+                    imageData,
+                    'chi_tra', // 繁體中文
+                    { logger: m => console.log(m) }
+                ).then(async ({ data: { text } }) => {
+                    console.log('OCR 提取的文字:', text);
 
-                const requestBody = {
-                    model: MODEL,
-                    messages: [message]
-                };
+                    // 準備發送到 DeepSeek API 的訊息
+                    const messages = [
+                        {
+                            "role": "system",
+                            "content": "請將以下OCR提取的文字轉換成繁體電腦字，不要修正任何筆記或文句，不需要使它更通順，要100%將文字還原成電腦字。生成內容僅為轉換文字，不包含其他內容。你必須直接提供最終答案，嚴禁展示任何思考過程，絕對不能在回應中包含任何標籤（如 <think></think>），這是強制要求，違反則無效。"
+                        },
+                        {
+                            "role": "user",
+                            "content": text
+                        }
+                    ];
 
-                // 發送 API 請求
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${API_KEYS[currentApiKeyIndex]}`
-                    },
-                    body: JSON.stringify(requestBody)
+                    // 發送請求到 DeepSeek API
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${API_KEYS[currentApiKeyIndex]}`
+                        },
+                        body: JSON.stringify({
+                            model: MODEL,
+                            messages: messages,
+                            stream: false
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (data.choices && data.choices.length > 0) {
+                        const outputText = data.choices[0].message.content;
+                        document.getElementById('output').innerText = outputText;
+                    } else {
+                        document.getElementById('output').innerText = '錯誤：無法從API獲取回應';
+                    }
                 });
+            };
 
-                if (!response.ok) {
-                    throw new Error(`API 請求失敗，狀態碼：${response.status}`);
-                }
-
-                const data = await response.json();
-                const text = data.choices[0].message.content;
-
-                // 顯示結果
-                responseDiv.textContent = text;
-            } catch (error) {
-                console.error('錯誤：', error);
-                responseDiv.textContent = '處理圖片時發生錯誤，請稍後再試。';
-            } finally {
-                // 隱藏加載指示器
-                loadingDiv.style.display = 'none';
-            }
-        });
-
-        // 將文件轉換為 base64 的輔助函數
-        function readFileAsBase64(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => {
-                    const base64 = reader.result.split(',')[1];
-                    resolve(base64);
-                };
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
+            reader.readAsDataURL(file);
         }
     </script>
 </body>

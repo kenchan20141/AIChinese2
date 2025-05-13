@@ -407,6 +407,14 @@
             <td>智能原稿紙</td>
             <td>提供電子原稿紙，並設有AI答惑功能。</td>
         </tr>
+         <tr>
+            <td>AI擬題</td>
+            <td>由AI擬設閱讀卷及寫作卷的題目。</td>
+        </tr>
+          <tr>
+            <td>琢玉</td>
+            <td>可在PDF及圖片檔案右邊作旁批或備註。</td>
+        </tr>
         <tr>
             <td>手寫文字轉換電腦文字</td>
             <td>i2OCR 是免費的線上光學字元辨識 (OCR) 軟體，可從圖像或PDF文件中提取文字。</td>
@@ -419,6 +427,8 @@
 <div class="box">
     <h2>選擇工具：</h2>
     <button id="manuscriptPaperBtn">🖥智能原稿紙</button>
+    <button id="aiGeneratorBtn" style="background-color: #008080;">📝AI擬題</button>
+    <button id="zhuoyuBtn" style="background-color: #800000;">✏️琢玉</button>
     <button id="ocrBtn" style="background-color: #fd7e14;">✍手寫文字轉換電腦文字</button>
 </div>
     
@@ -697,7 +707,7 @@
     </div>
     <button class="hide-btn" id="hide-player">🔽</button>
 </div>
-<button id="show-player">🎵</button>
+<button id="show-player">🎹</button>
 <audio id="audio" preload="auto"></audio>
 
 
@@ -955,6 +965,14 @@ showPlayerBtn.addEventListener('click', function() {
 
 document.getElementById("manuscriptPaperBtn").addEventListener("click", function() {
     window.open("https://kenchan20141.github.io/manuscriptpaper/", "_blank");
+});
+
+          document.getElementById("aiGeneratorBtn").addEventListener("click", function() {
+    window.open("https://kenchan20141.github.io/generator/", "_blank");
+});
+
+         document.getElementById("zhuoyuBtn").addEventListener("click", function() {
+    window.open("https://kenchan20141.github.io/WCT/", "_blank");
 });
 
         // 為「手寫文字轉換電腦文字」按鈕添加點擊事件處理函數
